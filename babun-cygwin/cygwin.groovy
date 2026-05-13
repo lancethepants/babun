@@ -1,6 +1,10 @@
 #!/usr/bin/env groovy
+// === MODERNIZED: Groovy 4+/5 requires explicit grab + import for AntBuilder ===
+//   In Groovy 3 and earlier, AntBuilder was part of groovy-core. Groovy 4 split
+//   it into the optional `groovy-ant` module.
 @Grab(group='org.apache.groovy', module='groovy-ant', version='5.0.6')
 import groovy.ant.AntBuilder
+// === /MODERNIZED ===
 import static java.lang.System.*
 
 execute()
@@ -24,8 +28,14 @@ def execute() {
         copySymlinksScripts(inputFolder, cygwinFolder)
         findSymlinks(cygwinFolder)
 
-        // write cygwin.version marker (consumed by babun-core and babun update flow)
+        // === MODERNIZED: write cygwin.version marker ===
+        //   Original behavior: this file was committed in a separate
+        //   github.com/babun/babun-cygwin/ repo and never created during build.
+        //   That repo is dead. We now derive the real version (e.g. 3.6.9-1)
+        //   from the cygwin package's `version:` line in setup.ini.
+        //   Consumed by babun-core to populate installed/cygwin marker.
         writeCygwinVersion(outputFolder, repoFolder)
+        // === /MODERNIZED ===
     } catch (Exception ex) {
         error("ERROR: Unexpected error occurred: " + ex + " . Quitting!", true)
         ex.printStackTrace()
@@ -47,14 +57,25 @@ def initEnvironment() {
     File pkgsFile = new File(this.args[3]) 
     boolean downloadOnly =  Boolean.parseBoolean(this.args[4])
     if (!outputFolder.exists()) {
+        // === MODERNIZED: mkdir -> mkdirs (same fix as in packages.groovy) ===
+        //   Original:  outputFolder.mkdir()
         outputFolder.mkdirs()
+        // === /MODERNIZED ===
     }
     File cygwinFolder = new File(outputFolder, "cygwin")
+    // === MODERNIZED: mkdir -> mkdirs ===
+    //   Original:  cygwinFolder.mkdir()
     cygwinFolder.mkdirs()
+    // === /MODERNIZED ===
     return [repoFolder, inputFolder, outputFolder, cygwinFolder, pkgsFile, downloadOnly]
 }
 
-def downloadCygwinInstaller(File outputFolder) {    
+def downloadCygwinInstaller(File outputFolder) {
+    // === MODERNIZED: setup-x86.exe -> setup-x86_64.exe, http -> https ===
+    //   Original:
+    //     File cygwinInstaller = new File(outputFolder, "setup-x86.exe")
+    //     ...
+    //     cygwinInstaller << "http://cygwin.com/setup-x86.exe".toURL()
     File cygwinInstaller = new File(outputFolder, "setup-x86_64.exe")
     if(!cygwinInstaller.exists()) {
         println "Downloading Cygwin installer"
@@ -64,6 +85,7 @@ def downloadCygwinInstaller(File outputFolder) {
     } else {
         println "Cygwin installer alread exists, skipping the download!";
     }
+    // === /MODERNIZED ===
 
     return cygwinInstaller
 }
@@ -72,6 +94,13 @@ def installCygwin(File cygwinInstaller, File repoFolder, File cygwinFolder, File
     println "Installing cygwin"
     String pkgs = pkgsFile.text.trim().replaceAll("(\\s)+", ",")    
     println "Packages to install: ${pkgs}"
+    // === MODERNIZED: added --no-admin and --no-verify ===
+    //   --no-admin: prevents UAC elevation. Without it, setup.exe re-launches
+    //   itself elevated and the original process returns immediately while the
+    //   install is still running. The build then races ahead to symlinks_find
+    //   and finds no bash.exe.
+    //   --no-verify: we don't fetch .sig signature files alongside packages,
+    //   so signature verification on setup.ini would fail.
     String installCommand = "\"${cygwinInstaller.absolutePath}\" " +
             "--quiet-mode " +
             "--no-admin " +
@@ -83,6 +112,7 @@ def installCygwin(File cygwinInstaller, File repoFolder, File cygwinFolder, File
             "--no-startmenu " +
             "--no-desktop " +
             "--packages " + pkgs
+    // === /MODERNIZED ===
     println installCommand
     executeCmd(installCommand, 10)
 }
@@ -93,6 +123,11 @@ def copySymlinksScripts(File inputFolder, File cygwinFolder) {
     }    
 }
 
+// === MODERNIZED: new function — write cygwin.version marker ===
+//   This file used to live in github.com/babun/babun-cygwin/cygwin.version
+//   (a separate repo, now dead). We parse the installed cygwin package's
+//   `version:` from setup.ini and write the real version to target/cygwin.version
+//   for core.groovy to copy into the dist tree as the installed-cygwin marker.
 def writeCygwinVersion(File outputFolder, File repoFolder) {
     String version = "0.0.0"
     File setupIni = new File(repoFolder, "x86_64/setup.ini")
@@ -105,6 +140,7 @@ def writeCygwinVersion(File outputFolder, File repoFolder) {
     versionFile.text = "${version}\n"
     println "Wrote ${versionFile.absolutePath} (cygwin ${version})"
 }
+// === /MODERNIZED ===
 
 def findSymlinks(File cygwinFolder) {
     String symlinksFindScript = "/etc/postinstall/symlinks_find.sh"

@@ -64,9 +64,22 @@ if "%MIRROR%"=="" (
 echo [babun] Upgrading Cygwin from %MIRROR%
 echo [babun] Writing data to %DIST_DIR%
 
+rem === MODERNIZED: download setup-x86_64.exe directly from cygwin.com ===
+rem   Original:
+rem     "%BASH%" -c "... /bin/rm.exe -f '%DIST_DIR%/setup-x86.exe' '%DIST_DIR%/cygwin.version'" || goto :ERROR
+rem     echo download cyg version
+rem     "%BASH%" -c "... wget ... https://raw.githubusercontent.com/babun/babun-cygwin/master/cygwin.version" || goto :ERROR
+rem     set /p CYGWIN_VERSION=<"%DIST_DIR%/cygwin.version"
+rem     echo [babun] Downloading Cygwin %CYGWIN_VERSION%
+rem     "%BASH%" -c "... wget ... https://raw.githubusercontent.com/babun/babun-cygwin/%CYGWIN_VERSION%/babun-cygwin/setup-x86.exe" || goto :ERROR
+rem
+rem   Why: the babun/babun-cygwin sub-repo is dead (404) and the pinned setup
+rem   binary would be stale anyway. Modern setup.exe is always idempotent —
+rem   just download fresh and let it figure out what needs updating.
 "%BASH%" -c "source ~/.babunrc; /bin/rm.exe -f '%DIST_DIR%/setup-x86_64.exe' '%DIST_DIR%/cygwin.version'" || goto :ERROR
 echo [babun] Downloading latest Cygwin installer from cygwin.com
 "%BASH%" -c "source ~/.babunrc; /bin/wget.exe --directory-prefix='%DIST_DIR%' https://cygwin.com/setup-x86_64.exe" || goto :ERROR
+rem === /MODERNIZED ===
 
 :SETUPRC
 echo [babun] Preparing setup.rc config
@@ -104,18 +117,28 @@ if "%PROXY%" == "" (
 :DIRECTDOWNLOAD
 cd "%DIST_DIR%"
 echo [babun] Executing Cygwin upgrade without proxy
+rem === MODERNIZED: setup-x86.exe -> setup-x86_64.exe ===
+rem   Original:  setup-x86.exe --quiet-mode --upgrade-also ...
 setup-x86_64.exe --quiet-mode --upgrade-also --site="%MIRROR%" --no-admin --no-shortcuts --no-startmenu --no-desktop --root="%CYGWIN_HOME%" --local-package-dir="%DIST_DIR%" || goto :ERROR
+rem === /MODERNIZED ===
 GOTO VERSION
 
 :PROXYDOWNLOAD
 cd "%DIST_DIR%"
 echo [babun] Executing Cygwin upgrade with proxy=%PROXY%
+rem === MODERNIZED: setup-x86.exe -> setup-x86_64.exe ===
+rem   Original:  setup-x86.exe --quiet-mode --upgrade-also ...
 setup-x86_64.exe --quiet-mode --upgrade-also --site="%MIRROR%" --no-admin --no-shortcuts --no-startmenu --no-desktop --root="%CYGWIN_HOME%" --local-package-dir="%DIST_DIR%" --proxy="%PROXY%" || goto :ERROR
+rem === /MODERNIZED ===
 GOTO VERSION
 
 :VERSION
 echo [babun] Updating Cygwin version number
+rem === MODERNIZED: write `uname -r` instead of copying github-pinned cygwin.version ===
+rem   Original:
+rem     copy /Y "%DIST_DIR%/cygwin.version" "%CYGWIN_HOME%/usr/local/etc/babun/installed/cygwin" || goto :ERROR
 "%BASH%" -c "/bin/uname -r > /usr/local/etc/babun/installed/cygwin" || goto :ERROR
+rem === /MODERNIZED ===
 GOTO CYGFIX
 
 :CYGFIX

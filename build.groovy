@@ -75,7 +75,14 @@ def executeBabunPackages() {
     File workingDir = new File(getRoot(), module);
     String conf = new File(getRoot(), "${module}/conf/").absolutePath
     String out = new File(getTarget(), "${module}").absolutePath
+    // === MODERNIZED: route through cmd /c (was "groovy.bat") ===
+    //   Original:  def command = ["groovy.bat", "packages.groovy", conf, out]
+    //   Why: Scoop's groovy install creates a `groovy.cmd` shim, not `.bat`.
+    //   Java's ProcessBuilder calls Windows CreateProcess, which only auto-
+    //   appends `.exe` to bare names — not `.cmd`/`.bat`. Routing through
+    //   `cmd /c` lets PATHEXT resolution find the right shim.
     def command = ["cmd", "/c", "groovy", "packages.groovy", conf, out]
+    // === /MODERNIZED ===
     executeCmd(command, workingDir, TEN_MINUTES)
 }
 
@@ -86,10 +93,16 @@ def executeBabunCygwin(boolean downloadOnly = false) {
     String input = workingDir.absolutePath
     String repo = new File(getTarget(), "babun-packages").absolutePath
     String out = new File(getTarget(), "${module}").absolutePath
+    // === MODERNIZED: package list renamed for x86_64 ===
+    //   Original:  String pkgs = new File(getRoot(), "babun-packages/conf/cygwin.x86.packages")
     String pkgs = new File(getRoot(), "babun-packages/conf/cygwin.x86_64.packages")
+    // === /MODERNIZED ===
     String downOnly = downloadOnly as String
     println "Download only flag set to: ${downOnly}"
+    // === MODERNIZED: cmd /c wrapper (see comment above for rationale) ===
+    //   Original:  def command = ["groovy.bat", "cygwin.groovy", repo, input, out, pkgs, downOnly]
     def command = ["cmd", "/c", "groovy", "cygwin.groovy", repo, input, out, pkgs, downOnly]
+    // === /MODERNIZED ===
     executeCmd(command, workingDir, TEN_MINUTES)
 }
 
@@ -100,10 +113,13 @@ def executeBabunCore() {
     File workingDir = new File(getRoot(), module);
     String root = getRoot().absolutePath
     String cygwin = new File(getTarget(), "babun-cygwin/cygwin").absolutePath
-    String out = new File(getTarget(), "${module}").absolutePath    
+    String out = new File(getTarget(), "${module}").absolutePath
     String branch = getenv("babun_branch") ? getenv("babun_branch") : "release"
     println "Taking babun branch [${branch}]"
+    // === MODERNIZED: cmd /c wrapper (see comment above for rationale) ===
+    //   Original:  def command = ["groovy.bat", "core.groovy", root, cygwin, out, branch]
     def command = ["cmd", "/c", "groovy", "core.groovy", root, cygwin, out, branch]
+    // === /MODERNIZED ===
     executeCmd(command, workingDir, TEN_MINUTES)
 }
 
@@ -115,7 +131,10 @@ def executeBabunDist() {
     String input = workingDir.absolutePath
     String cygwin = new File(getTarget(), "babun-core/cygwin").absolutePath
     String out = new File(getTarget(), "${module}").absolutePath
+    // === MODERNIZED: cmd /c wrapper (see comment above for rationale) ===
+    //   Original:  def command = ["groovy.bat", "dist.groovy", cygwin, input, out, VERSION]
     def command = ["cmd", "/c", "groovy", "dist.groovy", cygwin, input, out, VERSION]
+    // === /MODERNIZED ===
     executeCmd(command, workingDir, TEN_MINUTES)
 }
 

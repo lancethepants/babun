@@ -41,7 +41,13 @@ function get_newest_cygwin_version {
 	if [[ -z $CHECK_TIMEOUT_IN_SECS ]]; then 
 		CHECK_TIMEOUT_IN_SECS=4
 	fi
+	# === MODERNIZED: point at this fork's cygwin.version (was babun/babun-cygwin) ===
+	#   Original:  https://raw.githubusercontent.com/babun/babun-cygwin/master/cygwin.version
+	#   The babun-cygwin sub-repo is abandoned. This fork keeps a `cygwin.version`
+	#   file at the repo root that the maintainer bumps when a new Cygwin release
+	#   should trigger the "OUTDATED" hint for end users.
 	local newest_cygwin_version=$( curl --silent --insecure --user-agent "$USER_AGENT" --connect-timeout $CHECK_TIMEOUT_IN_SECS --location https://raw.githubusercontent.com/lancethepants/babun/master/cygwin.version || echo "" )
+	# === /MODERNIZED ===
 	echo "$newest_cygwin_version"
 }
 

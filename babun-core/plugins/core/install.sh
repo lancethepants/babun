@@ -14,18 +14,31 @@ chmod 755 /usr/local/bin/babun
 /bin/cp -rf /usr/local/etc/babun.rc /usr/local/etc/babun.rc.old || echo ""
 /bin/cp -rf $src/babun.rc /usr/local/etc
 
+# === MODERNIZED: reordered .babunrc setup BEFORE `source babun.rc` ===
+#   Original order was:
+#     source /usr/local/etc/babun.rc       # line 16 in the original
+#     /bin/cp -rf $src/babun.bash /usr/local/etc
+#     ... other cp ...
+#     mkdir -p "$babun/home/core"
+#     /bin/cp -rf $src/.babunrc "$babun/home/core/.babunrc"
+#
+#   Why changed: babun.rc has logic at its tail —
+#       if [[ ! -f "$homedir/.babunrc" ]]; then babun install; fi
+#   — that triggers `plugins/install_home.sh` for every plugin on first source.
+#   core's install_home.sh tries to copy from $babun/home/core/.babunrc, which
+#   in the original ordering hadn't been created yet (it's at line 24, after
+#   the source). Result: install_home.sh failed and set off a cascade. Now we
+#   stage all the files first, THEN source babun.rc.
 /bin/cp -rf $src/babun.bash /usr/local/etc
 /bin/cp -rf $src/babun.zsh /usr/local/etc
 /bin/cp -rf $src/babun.start /usr/local/etc
 /bin/cp -rf $src/babun.instance /usr/local/etc
 
-# Stage home/core/.babunrc and babun.instance BEFORE sourcing babun.rc.
-# babun.rc auto-runs `babun install` on first source if ~/.babunrc doesn't exist,
-# which in turn runs install_home.sh — which needs these files in place.
 mkdir -p "$babun/home/core"
 /bin/cp -rf $src/.babunrc "$babun/home/core/.babunrc"
 
 source /usr/local/etc/babun.rc
+# === /MODERNIZED ===
 
 
 profiles=("/etc/bash.bashrc")
@@ -89,8 +102,20 @@ if [[ "$installed_version" -le 1 ]]; then
 
 	# fix permissions in /usr/local
 	echo "Fixing permissions"
+	# === MODERNIZED: chmod failures are non-fatal ===
+	#   Original:
+	#     /bin/chmod 755 -R /usr/local
+	#     /bin/chmod u+rwx -R /etc
+	#
+	#   Why changed: under `set -e -f -o pipefail` (top of file) a single failing
+	#   chmod kills the whole script. When the build runs as a non-admin user,
+	#   some files in /etc/ have Windows ACLs we can't modify and chmod returns
+	#   non-zero. The original behavior killed the whole install on what is
+	#   really a best-effort hardening step. We log a banner so the warnings
+	#   above are visible but don't abort.
 	/bin/chmod 755 -R /usr/local || echo "[babun] chmod /usr/local had warnings above (non-fatal)"
 	/bin/chmod u+rwx -R /etc || echo "[babun] chmod /etc had warnings above (non-fatal)"
+	# === /MODERNIZED ===
 
 
 	# fix mintty problem in the babun.bat launcher (best effort)
