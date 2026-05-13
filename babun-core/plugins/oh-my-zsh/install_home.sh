@@ -20,19 +20,43 @@ if [ ! -d "$homedir/.oh-my-zsh" ]; then
     # === /MODERNIZED ===
     /bin/cp -rf "$src/.oh-my-zsh" "$homedir/.oh-my-zsh"
 
-    # setting zsh as the default shell
-    if grep -q "/bin/bash" "/etc/passwd"; then
+    # === MODERNIZED: skip cleanly if /etc/passwd doesn't exist ===
+    #   Original:
+    #     if grep -q "/bin/bash" "/etc/passwd"; then
+    #         sed -i 's/\/bin\/bash/\/bin\/zsh/' "/etc/passwd"
+    #     fi
+    #
+    #   Why: modern Cygwin doesn't create /etc/passwd by default — user info
+    #   is read dynamically from Windows accounts via cygwin1.dll. The file
+    #   only exists if mkpasswd.exe -l > /etc/passwd has been run (which the
+    #   end-user install.bat does via post_extract.sh, but the build doesn't).
+    #   Adding the existence check prevents the noisy "grep: /etc/passwd: No
+    #   such file or directory" stderr without changing functionality.
+    if [ -f "/etc/passwd" ] && grep -q "/bin/bash" "/etc/passwd"; then
    		sed -i 's/\/bin\/bash/\/bin\/zsh/' "/etc/passwd"
  	fi
+    # === /MODERNIZED ===
 fi
 
 
 if [ ! -f "$homedir/.zshrc" ]; then
-	/bin/cp "$babun/home/.zshrc" "$homedir/.zshrc" 
+	/bin/cp "$babun/home/.zshrc" "$homedir/.zshrc"
 
-	# fixing oh-my-zsh components
-	zsh -c "source ~/.zshrc; rm -f \"$homedir/.zcompdump\"; compinit -u" &> /dev/null
-	zsh -c "source ~/.zshrc; cat \"$homedir/.zcompdump\" > \"$homedir/.zcompdump-\"*" &> /dev/null	
+	# === MODERNIZED: completion-cache prewarm is best-effort ===
+	#   Original (without `|| true`):
+	#     zsh -c "source ~/.zshrc; rm -f ...; compinit -u" &> /dev/null
+	#     zsh -c "source ~/.zshrc; cat \"$homedir/.zcompdump\" > \"$homedir/.zcompdump-\"*" &> /dev/null
+	#
+	#   Why: pre-populating the zsh completion cache is a nice-to-have, not
+	#   required. The second command's glob (`.zcompdump-*`) only resolves
+	#   correctly after compinit creates the file, and modern zsh + oh-my-zsh
+	#   sometimes can't create it in a non-interactive sourced context. End-
+	#   user shells regenerate the cache lazily on first interactive start,
+	#   so failure here is harmless. Without `|| true`, set -e killed the
+	#   whole install_home.sh on this cosmetic step.
+	zsh -c "source ~/.zshrc; rm -f \"$homedir/.zcompdump\"; compinit -u" &> /dev/null || true
+	zsh -c "source ~/.zshrc; cat \"$homedir/.zcompdump\" > \"$homedir/.zcompdump-\"*" &> /dev/null || true
+	# === /MODERNIZED ===
 fi
 
 if [[ "$installed_version" -le 1 ]]; then   
