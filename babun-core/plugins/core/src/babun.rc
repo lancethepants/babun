@@ -73,7 +73,22 @@ PATH="$HOME_LOCAL_BIN:$PATH"
 # IMPORTANT -> THIS HAS TO BE LOCATED AT THE END OF THIS SCRIPT
 # install babun to user's home folder if it does not exist
 #
-if [[ ! -f "$homedir/.babunrc" ]]; then
+# === MODERNIZED: skip auto-install when BABUN_BUILD is set ===
+#   Original:
+#     if [[ ! -f "$homedir/.babunrc" ]]; then
+#         echo "Installing babun to user home"
+#         babun install
+#     fi
+#
+#   Why guarded: core/install.sh sources this file during the build BEFORE the
+#   other plugins' install.sh have populated $babun/home/<plugin>/ templates.
+#   The auto-install would invoke install_home for every plugin, including
+#   shell/oh-my-zsh/etc., which then fail on missing templates and leave the
+#   build user's ~/ partially configured. The build sets BABUN_BUILD=1 to
+#   suppress this premature run; install_home is invoked explicitly at the end
+#   of plugins/install.sh once all templates are in place.
+if [[ -z "$BABUN_BUILD" ]] && [[ ! -f "$homedir/.babunrc" ]]; then
 	echo "Installing babun to user home"
 	babun install
 fi
+# === /MODERNIZED ===

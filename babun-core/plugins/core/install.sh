@@ -37,7 +37,11 @@ chmod 755 /usr/local/bin/babun
 mkdir -p "$babun/home/core"
 /bin/cp -rf $src/.babunrc "$babun/home/core/.babunrc"
 
-source /usr/local/etc/babun.rc
+# Set BABUN_BUILD so babun.rc skips its auto-install. Other plugins' install.sh
+# scripts haven't run yet (we're still mid-loop in plugins/install.sh), so
+# triggering install_home now would fail on missing templates. install_home is
+# invoked explicitly at the end of plugins/install.sh instead.
+BABUN_BUILD=1 source /usr/local/etc/babun.rc
 # === /MODERNIZED ===
 
 
