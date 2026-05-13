@@ -6,13 +6,21 @@ source "$babun_tools/git.sh"
 
 src="$babun/home/oh-my-zsh"
 
-if [ ! -d "$homedir/.oh-my-zsh" ]; then		
+if [ ! -d "$homedir/.oh-my-zsh" ]; then
     git --git-dir="$src/.oh-my-zsh/.git" --work-tree="$src/.oh-my-zsh" reset --hard
-    # installing oh-my-zsh
-    /bin/chmod 755 -R "$src/.oh-my-zsh"
-    /bin/cp -rf "$src/.oh-my-zsh" "$homedir/.oh-my-zsh" 	    
+    # === MODERNIZED: chmod is best-effort, don't kill install on perm errors ===
+    #   Original:
+    #     /bin/chmod 755 -R "$src/.oh-my-zsh"
+    #
+    #   Why: same root cause as the chmod /etc/ in core/install.sh — under a
+    #   non-admin build some files (typically inside .oh-my-zsh/.git/) inherit
+    #   ACLs that the build user can't modify. cp -rf reads them fine, so the
+    #   chmod failure is cosmetic, but set -e would otherwise abort install_home.
+    /bin/chmod 755 -R "$src/.oh-my-zsh" || echo "[babun] chmod $src/.oh-my-zsh had warnings above (non-fatal)"
+    # === /MODERNIZED ===
+    /bin/cp -rf "$src/.oh-my-zsh" "$homedir/.oh-my-zsh"
 
-    # setting zsh as the default shell    	
+    # setting zsh as the default shell
     if grep -q "/bin/bash" "/etc/passwd"; then
    		sed -i 's/\/bin\/bash/\/bin\/zsh/' "/etc/passwd"
  	fi
