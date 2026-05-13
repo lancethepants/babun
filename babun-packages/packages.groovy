@@ -10,8 +10,8 @@ def execute() {
     try {
         checkArguments()
         (confFolder, outputFolder, setupVersion) = initEnvironment()
-        downloadPackages(confFolder, outputFolder, "x86")
-        copyPackagesListToTarget(confFolder, outputFolder, "x86")
+        downloadPackages(confFolder, outputFolder, "x86_64")
+        copyPackagesListToTarget(confFolder, outputFolder, "x86_64")
     } catch (Exception ex) {
         error("Unexpected error occurred: " + ex + " . Quitting!")
         ex.printStackTrace()
@@ -30,8 +30,8 @@ def initEnvironment() {
     File confFolder = new File(this.args[0])
     File outputFolder = new File(this.args[1])
     if (!outputFolder.exists()) {
-        outputFolder.mkdir()
-    }    
+        outputFolder.mkdirs()
+    }
     return [confFolder, outputFolder]
 }
 
@@ -47,8 +47,17 @@ def downloadPackages(File confFolder, File outputFolder, String bitVersion) {
     def rootPackages = packagesFile.readLines().findAll() { it }
     def repositories = new File(confFolder, "cygwin.repositories").readLines().findAll() { it }
     def processed = [] as Set
+    boolean addedBase = false
     for (repo in repositories) {
         String setupIni = downloadSetupIni(repo, bitVersion, outputFolder)
+        if (!addedBase) {
+            def basePackages = findBasePackages(setupIni)
+            println "Found ${basePackages.size()} Base-category packages; adding to download set"
+            for (String basePkg : basePackages) {
+                if (!rootPackages.contains(basePkg)) rootPackages.add(basePkg)
+            }
+            addedBase = true
+        }
         for (String rootPkg : rootPackages) {
             if (processed.contains(rootPkg.trim())) continue
             def processedInStep = downloadRootPackage(repo, setupIni, rootPkg.trim(), processed, outputFolder)
@@ -68,10 +77,12 @@ def downloadPackages(File confFolder, File outputFolder, String bitVersion) {
 def downloadSetupIni(String repository, String bitVersion, File outputFolder) {
     println "Downloading [setup.ini] from repository [${repository}]"
     String setupIniUrl = "${repository}/${bitVersion}/setup.ini"
-    String downloadSetupIni = "wget -l 2 -r -np -q --cut-dirs=3 -P " + outputFolder.getAbsolutePath() + " " + setupIniUrl    
-    executeCmd(downloadSetupIni, 5)
-    String setupIniContent = setupIniUrl.toURL().text
-    return setupIniContent
+    File setupIniFile = new File(outputFolder, "${bitVersion}/setup.ini")
+    setupIniFile.parentFile.mkdirs()
+    new URL(setupIniUrl).withInputStream { is ->
+        setupIniFile.withOutputStream { os -> os << is }
+    }
+    return setupIniFile.text
 }
 
 def downloadRootPackage(String repo, String setupIni, String rootPkg, Set<String> processed, File outputFolder) {
@@ -108,25 +119,56 @@ def downloadRootPackage(String repo, String setupIni, String rootPkg, Set<String
 
 def buildPackageDependencyTree(String setupIni, String pkgName, Set<String> result) {
     String pkgInfo = parsePackageInfo(setupIni, pkgName)
-    result.add(pkgName)
     if (!pkgInfo) {
-        throw new RuntimeException("Cannot find dependencies of [${pkgName}]")
+        return
     }
+    result.add(pkgName)
     String[] deps = parsePackageRequires(pkgInfo)
     for (String dep : deps) {
-        if (!result.contains(dep.trim())) {
-            buildPackageDependencyTree(setupIni, dep.trim(), result)
+        String name = dep.trim()
+        if (name && !result.contains(name)) {
+            buildPackageDependencyTree(setupIni, name, result)
         }
     }
 }
 
 def parsePackageRequires(String pkgInfo) {
-    String requires = pkgInfo?.split("\n")?.find() { it.startsWith("requires:") }
-    return requires?.replace("requires:", "")?.trim()?.split("\\s")
+    if (!pkgInfo) return new String[0]
+    def lines = pkgInfo.split("\n")
+    def deps = [] as Set
+    String depends2 = lines.find { it.startsWith("depends2:") }
+    if (depends2) {
+        depends2.replace("depends2:", "").trim().split("\\s*,\\s*").each {
+            String name = it.replaceAll(/\s*\(.*\)\s*/, "").trim()
+            if (name) deps.add(name)
+        }
+    }
+    String requires = lines.find { it.startsWith("requires:") }
+    if (requires) {
+        requires.replace("requires:", "").trim().split("\\s+").each {
+            if (it.trim()) deps.add(it.trim())
+        }
+    }
+    return deps.toArray(new String[0])
 }
 
 def parsePackageInfo(String setupIni, String packageName) {
     return setupIni?.split("(?=@ )")?.find() { it.contains("@ ${packageName}") }
+}
+
+def findBasePackages(String setupIni) {
+    def basePackages = [] as Set
+    for (String entry : setupIni.split("(?=@ )")) {
+        def lines = entry.split("\n")
+        if (lines.length < 2) continue
+        def firstLine = lines[0]
+        if (!firstLine.startsWith("@ ")) continue
+        def categoryLine = lines.find { it.startsWith("category:") }
+        if (categoryLine && categoryLine.split("\\s+").contains("Base")) {
+            basePackages.add(firstLine.substring(2).trim())
+        }
+    }
+    return basePackages
 }
 
 def parsePackagePath(String pkgInfo) {
@@ -137,12 +179,17 @@ def parsePackagePath(String pkgInfo) {
 
 def downloadPackage(String repositoryUrl, String packagePath, File outputFolder) {
     String packageUrl = repositoryUrl + packagePath
-    String downloadCommand = "wget -l 2 -r -np -q --cut-dirs=3 -P " + outputFolder.getAbsolutePath() + " " + packageUrl
-    if (executeCmd(downloadCommand, 5) != 0) {
-        println "Could not download " + packageUrl
+    File pkgFile = new File(outputFolder, packagePath)
+    try {
+        pkgFile.parentFile.mkdirs()
+        new URL(packageUrl).withInputStream { is ->
+            pkgFile.withOutputStream { os -> os << is }
+        }
+        return true
+    } catch (Exception ex) {
+        println "Could not download " + packageUrl + ": " + ex.message
         return false
     }
-    return true
 }
 
 int executeCmd(String command, int timeout) {

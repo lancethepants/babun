@@ -13,15 +13,19 @@ chmod 755 /usr/local/bin/babun
 
 /bin/cp -rf /usr/local/etc/babun.rc /usr/local/etc/babun.rc.old || echo ""
 /bin/cp -rf $src/babun.rc /usr/local/etc
-source /usr/local/etc/babun.rc
 
 /bin/cp -rf $src/babun.bash /usr/local/etc
 /bin/cp -rf $src/babun.zsh /usr/local/etc
 /bin/cp -rf $src/babun.start /usr/local/etc
 /bin/cp -rf $src/babun.instance /usr/local/etc
 
+# Stage home/core/.babunrc and babun.instance BEFORE sourcing babun.rc.
+# babun.rc auto-runs `babun install` on first source if ~/.babunrc doesn't exist,
+# which in turn runs install_home.sh — which needs these files in place.
 mkdir -p "$babun/home/core"
 /bin/cp -rf $src/.babunrc "$babun/home/core/.babunrc"
+
+source /usr/local/etc/babun.rc
 
 
 profiles=("/etc/bash.bashrc")
@@ -85,8 +89,8 @@ if [[ "$installed_version" -le 1 ]]; then
 
 	# fix permissions in /usr/local
 	echo "Fixing permissions"
-	/bin/chmod 755 -R /usr/local
-	/bin/chmod u+rwx -R /etc
+	/bin/chmod 755 -R /usr/local || echo "[babun] chmod /usr/local had warnings above (non-fatal)"
+	/bin/chmod u+rwx -R /etc || echo "[babun] chmod /etc had warnings above (non-fatal)"
 
 
 	# fix mintty problem in the babun.bat launcher (best effort)

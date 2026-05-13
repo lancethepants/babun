@@ -35,13 +35,36 @@ Distribution package is located in the `target/babun-dist` folder.
 This module contains documentation written in ASCIIDOC.
 
 
+== Build prerequisites (Windows)
+
+Babun must be built on Windows because the `babun-cygwin` step invokes the native `setup-x86_64.exe` installer. You need a JDK and Groovy on `PATH`. The recommended setup uses https://scoop.sh[Scoop], a per-user package manager that needs no admin rights.
+
+From a regular (non-admin) PowerShell window:
+----
+# 1. Install Scoop
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+irm get.scoop.sh | iex
+
+# 2. Add the "java" bucket (extra repo where JDKs live)
+scoop bucket add java
+
+# 3. Install JDK 17 (LTS) and Groovy 4.x
+scoop install temurin17-jdk groovy
+
+# 4. Verify in a fresh terminal
+java -version
+groovy --version
+----
+
+JDK 17 + Groovy 4.x is the tested combination. Older JDK 8 / Groovy 2.x stacks can fail TLS handshakes against modern Cygwin mirrors and are not recommended.
+
 == Building from source
 
-The project is regularly built using Jenkins, on a slave node featuring the Windows Server OS. The Windows OS is required to fully build the distribution package as one of the goals invokes the native `cygwin.exe` installer. The artifacts created by each module are cached/stored in the target folder after a successful build of each step. This mechanism is not intelligent enough to calculate the diffs so if you would like to fully rebuild the whole dist package make sure to invoke the `clean` goal before the `package` goal. For now it's not possible to invoke a build of selective modules only. 
+The Windows OS is required to fully build the distribution package as one of the goals invokes the native `cygwin.exe` installer. The artifacts created by each module are cached/stored in the target folder after a successful build of each step. This mechanism is not intelligent enough to calculate the diffs so if you would like to fully rebuild the whole dist package make sure to invoke the `clean` goal before the `package` goal. For now it's not possible to invoke a build of selective modules only.
 
 In order to build the dist package invoke:
 ----
-groovy build.groovy package 
+groovy build.groovy package
 ----
 
 In order to clean the project target folder invoke:

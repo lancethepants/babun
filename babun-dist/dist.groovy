@@ -1,4 +1,6 @@
 #!/usr/bin/env groovy
+@Grab(group='org.apache.groovy', module='groovy-ant', version='5.0.6')
+import groovy.ant.AntBuilder
 import static java.lang.System.*
 
 execute()

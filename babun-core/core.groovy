@@ -1,4 +1,6 @@
 #!/usr/bin/env groovy
+@Grab(group='org.apache.groovy', module='groovy-ant', version='5.0.6')
+import groovy.ant.AntBuilder
 import static java.lang.System.*
 
 execute()
@@ -9,7 +11,7 @@ def execute() {
         checkArguments()
         (rootFolder, cygwinFolder, outputFolder, babunBranch) = initEnvironment()
         copyCygwin(rootFolder, cygwinFolder, outputFolder)
-        installCore(outputFolder, babunBranch)    
+        installCore(outputFolder, babunBranch, rootFolder)
     } catch (Exception ex) {
         error("ERROR: Unexpected error occurred: " + ex + " . Quitting!", true)
         ex.printStackTrace()
@@ -36,11 +38,26 @@ def initEnvironment() {
 }
 
 def copyCygwin(File rootFolder, File cygwinFolder, File outputFolder) {
-    new AntBuilder().copy( todir: "${outputFolder.absolutePath}/cygwin", quiet: true ) {
-      fileset( dir: "${cygwinFolder.absolutePath}", defaultexcludes:"no" )
+    // Move (rename) rather than copy the cygwin tree. Every copy approach we tried
+    // — AntBuilder.copy, robocopy, even cygwin's own `cp -a` invoked via bash —
+    // either dropped Cygwin's NTFS symlink encoding and reparse-point junctions
+    // (breaking DLL loading for git-remote-https.exe et al.) or got hijacked by
+    // Windows' WSL `bash.exe` App Execution Alias and silently produced nothing.
+    // A filesystem-level rename does no per-file processing, preserves everything,
+    // and is atomic. The tradeoff: target/babun-cygwin/cygwin/ is gone after this
+    // step, so a partial Stage-3 failure requires `clean` before re-running.
+    File dstDir = new File(outputFolder, "cygwin")
+    if (dstDir.exists()) {
+        throw new RuntimeException("${dstDir.absolutePath} already exists; run `groovy build.groovy clean` before retrying")
     }
-    new AntBuilder().copy( file:"${rootFolder.absolutePath}/target/cygwin.version", 
-                           tofile:"${outputFolder.absolutePath}/cygwin/usr/local/etc/babun/installed/cygwin" )
+    outputFolder.mkdirs()
+    println "Moving cygwin tree: ${cygwinFolder.absolutePath} -> ${dstDir.absolutePath}"
+    java.nio.file.Files.move(cygwinFolder.toPath(), dstDir.toPath())
+    println "Move complete; sanity: ${new File(dstDir, "bin/bash.exe").exists() ? "bin/bash.exe present" : "MISSING bin/bash.exe"}"
+
+    File versionDst = new File(dstDir, "usr/local/etc/babun/installed/cygwin")
+    versionDst.parentFile.mkdirs()
+    versionDst.bytes = new File(rootFolder, "target/cygwin.version").bytes
 }
 
 // -----------------------------------------------------
@@ -48,19 +65,34 @@ def copyCygwin(File rootFolder, File cygwinFolder, File outputFolder) {
 // THIS SHOULD BE A SEPARATE SHELL SCRIPT
 // IT WILL ENABLE INSTALLING THE CORE ON OSX!!!
 // -----------------------------------------------------
-def installCore(File outputFolder, String babunBranch) {    
-    // rebase dll's
-    executeCmd("${outputFolder.absolutePath}/cygwin/bin/dash.exe -c '/usr/bin/rebaseall'", 5)
+def installCore(File outputFolder, String babunBranch, File rootFolder) {
+    // Note: rebaseall was historically run here to fix fork() conflicts on 32-bit
+    // Cygwin. On 64-bit it is rarely needed and was observed to break libcurl/libssl
+    // such that `git-remote-https` aborted on every HTTPS clone. The end-user's
+    // install.bat still runs rebaseall on the target machine.
 
     // setup bash invoked
     String bash = "${outputFolder.absolutePath}/cygwin/bin/bash.exe -l"
 
-    // checkout babun
-    String sslVerify = "git config --global http.sslverify"
-    String src = "/usr/local/etc/babun/source"
-    String clone = "git clone https://github.com/babun/babun.git ${src}"
-    String checkout = "git --git-dir='${src}/.git' --work-tree='${src}' checkout ${babunBranch}"    
-    executeCmd("${bash} -c \"${sslVerify} 'false'; ${clone}; ${checkout}; ${sslVerify} 'true';\"", 5)
+    // copy babun source from the local working tree into the cygwin sysroot.
+    // this replaces the prior `git clone https://github.com/...` so local edits
+    // (including uncommitted ones) flow into the built dist without a push cycle.
+    String dest = "${outputFolder.absolutePath}/cygwin/usr/local/etc/babun/source"
+    println "Copying babun source from ${rootFolder.absolutePath} to ${dest}"
+    new AntBuilder().copy(todir: dest, overwrite: "true", quiet: true) {
+        fileset(dir: "${rootFolder.absolutePath}", defaultexcludes: "no") {
+            exclude(name: "target/**")
+        }
+    }
+    // Sanity check: show the deployed cacert install.sh so we can verify it matches the working tree
+    File deployedCacert = new File("${dest}/babun-core/plugins/cacert/install.sh")
+    if (deployedCacert.exists()) {
+        println "--- deployed cacert/install.sh (first 6 lines) ---"
+        deployedCacert.readLines().take(6).each { println "    ${it}" }
+        println "--- end deployed cacert ---"
+    } else {
+        println "WARNING: deployed cacert/install.sh not found at ${deployedCacert.absolutePath}"
+    }
     
     // remove windows new line feeds
     String dos2unix = "find /usr/local/etc/babun/source/babun-core -type f -exec dos2unix {} \\;"

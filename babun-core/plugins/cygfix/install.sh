@@ -3,30 +3,15 @@ set -e -f -o pipefail
 source "/usr/local/etc/babun.instance"
 source "$babun_tools/script.sh"
 
-src="$babun_source/babun-core/plugins/cygfix/src"
+# Historically this plugin overwrote four binaries (mkpasswd, mkgroup,
+# git-remote-http, git-remote-https) with copies from Cygwin 1.7.29 / git 2.1.4
+# era to work around a Git NTLM-proxy bug (babun#455) and some account-handling
+# quirks. Those bundled binaries link against ancient versions of cygwin1.dll
+# and libcurl/libssl that no longer exist in modern (3.x+) Cygwin, and
+# installing them breaks HTTPS git clones with a cryptic "cannot open shared
+# object file" loader error. The modern Cygwin packages don't have the old
+# bugs, so we keep the stock binaries.
 
-echo "Fixing mkpasswd.exe"
-/bin/cp -rf /bin/mkpasswd.exe /bin/mkpasswd.exe.current
-/bin/cp -rf $src/bin/mkpasswd_1.7.29.exe /bin/mkpasswd.exe
-chmod 755 /bin/mkpasswd.exe 
-
-echo "Fixing mkgroup.exe"
-/bin/cp -rf /bin/mkgroup.exe /bin/mkgroup.exe.current
-/bin/cp -rf $src/bin/mkgroup_1.7.29.exe /bin/mkgroup.exe
-chmod 755 /bin/mkgroup.exe
-
-# Fix for https://github.com/babun/babun/issues/455 (Git ntlm proxy issue)
-echo "Fixing git-remote-http.exe"
-/bin/cp -rf /usr/libexec/git-core/git-remote-http.exe /usr/libexec/git-core/git-remote-http.exe.current
-/bin/cp -rf $src/bin/git-remote-http_2.1.4.exe /usr/libexec/git-core/git-remote-http.exe
-chmod 755 /usr/libexec/git-core/git-remote-http.exe
-
-echo "Fixing git-remote-https.exe"
-/bin/cp -rf /usr/libexec/git-core/git-remote-http.exe /usr/libexec/git-core/git-remote-https.exe.current
-/bin/cp -rf $src/bin/git-remote-https_2.1.4.exe /usr/libexec/git-core/git-remote-https.exe
-chmod 755 /usr/libexec/git-core/git-remote-https.exe
-
-if [ ! -f "/bin/vi" ]
-then
- ln -s /usr/bin/vim /bin/vi
+if [ ! -f "/bin/vi" ]; then
+    ln -s /usr/bin/vim /bin/vi
 fi

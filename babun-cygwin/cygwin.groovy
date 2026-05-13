@@ -1,4 +1,6 @@
 #!/usr/bin/env groovy
+@Grab(group='org.apache.groovy', module='groovy-ant', version='5.0.6')
+import groovy.ant.AntBuilder
 import static java.lang.System.*
 
 execute()
@@ -20,7 +22,10 @@ def execute() {
 
         // handle symlinks
         copySymlinksScripts(inputFolder, cygwinFolder)
-        findSymlinks(cygwinFolder)        
+        findSymlinks(cygwinFolder)
+
+        // write cygwin.version marker (consumed by babun-core and babun update flow)
+        writeCygwinVersion(outputFolder, repoFolder)
     } catch (Exception ex) {
         error("ERROR: Unexpected error occurred: " + ex + " . Quitting!", true)
         ex.printStackTrace()
@@ -42,19 +47,19 @@ def initEnvironment() {
     File pkgsFile = new File(this.args[3]) 
     boolean downloadOnly =  Boolean.parseBoolean(this.args[4])
     if (!outputFolder.exists()) {
-        outputFolder.mkdir()
-    }    
+        outputFolder.mkdirs()
+    }
     File cygwinFolder = new File(outputFolder, "cygwin")
-    cygwinFolder.mkdir()
+    cygwinFolder.mkdirs()
     return [repoFolder, inputFolder, outputFolder, cygwinFolder, pkgsFile, downloadOnly]
 }
 
 def downloadCygwinInstaller(File outputFolder) {    
-    File cygwinInstaller = new File(outputFolder, "setup-x86.exe")
+    File cygwinInstaller = new File(outputFolder, "setup-x86_64.exe")
     if(!cygwinInstaller.exists()) {
         println "Downloading Cygwin installer"
         use(FileBinaryCategory) {
-            cygwinInstaller << "http://cygwin.com/setup-x86.exe".toURL()
+            cygwinInstaller << "https://cygwin.com/setup-x86_64.exe".toURL()
         }
     } else {
         println "Cygwin installer alread exists, skipping the download!";
@@ -69,6 +74,8 @@ def installCygwin(File cygwinInstaller, File repoFolder, File cygwinFolder, File
     println "Packages to install: ${pkgs}"
     String installCommand = "\"${cygwinInstaller.absolutePath}\" " +
             "--quiet-mode " +
+            "--no-admin " +
+            "--no-verify " +
             "--local-install " +
             "--local-package-dir \"${repoFolder.absolutePath}\" " +
             "--root \"${cygwinFolder.absolutePath}\" " +
@@ -84,6 +91,19 @@ def copySymlinksScripts(File inputFolder, File cygwinFolder) {
     new AntBuilder().copy(todir: "${cygwinFolder.absolutePath}/etc/postinstall", quiet: true) {
         fileset(dir: "${inputFolder.absolutePath}/symlinks", defaultexcludes:"no")
     }    
+}
+
+def writeCygwinVersion(File outputFolder, File repoFolder) {
+    String version = "0.0.0"
+    File setupIni = new File(repoFolder, "x86_64/setup.ini")
+    if (setupIni.exists()) {
+        String cygwinEntry = setupIni.text.split("(?=@ )").find { it.startsWith("@ cygwin\n") }
+        String versionLine = cygwinEntry?.split("\n")?.find { it.startsWith("version:") }
+        if (versionLine) version = versionLine.replace("version:", "").trim()
+    }
+    File versionFile = new File(outputFolder.parentFile, "cygwin.version")
+    versionFile.text = "${version}\n"
+    println "Wrote ${versionFile.absolutePath} (cygwin ${version})"
 }
 
 def findSymlinks(File cygwinFolder) {
