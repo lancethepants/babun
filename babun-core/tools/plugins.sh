@@ -72,7 +72,17 @@ function plugin_install {
 
 function plugin_install_home {
 	local plugin_name="$1"
-	local installed_version=$(cat "$babun/installed/$plugin_name" || echo "0") 
+	# === MODERNIZED: silence stderr when the installed marker doesn't exist ===
+	#   Original:
+	#     local installed_version=$(cat "$babun/installed/$plugin_name" || echo "0")
+	#
+	#   Why: shell-here is in the install_home loop but NOT in the install loop
+	#   (its install.sh is a no-op), so $babun/installed/shell-here never gets
+	#   created by plugin_installed_ok. The original cat printed "No such file
+	#   or directory" to stderr every install. The `|| echo "0"` handled the
+	#   exit-code fine; we just hide the stderr noise.
+	local installed_version=$(cat "$babun/installed/$plugin_name" 2>/dev/null || echo "0")
+	# === /MODERNIZED ===
 	echo "Installing plugin's home [$plugin_name]"
 	local plugin_desc="$babun/source/babun-core/plugins/$plugin_name/plugin.desc"
 	if [[ ! -f "$plugin_desc" ]]; then	
