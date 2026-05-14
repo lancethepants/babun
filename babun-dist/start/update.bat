@@ -134,10 +134,14 @@ GOTO VERSION
 
 :VERSION
 echo [babun] Updating Cygwin version number
-rem === MODERNIZED: write `uname -r` instead of copying github-pinned cygwin.version ===
+rem === MODERNIZED: write Cygwin DLL version in X.Y.Z form ===
 rem   Original:
 rem     copy /Y "%DIST_DIR%/cygwin.version" "%CYGWIN_HOME%/usr/local/etc/babun/installed/cygwin" || goto :ERROR
-"%BASH%" -c "/bin/uname -r > /usr/local/etc/babun/installed/cygwin" || goto :ERROR
+rem   Earlier version used `uname -r` directly but that outputs "3.6.9-1.x86_64"
+rem   and check.sh's get_version_as_number only parses bare X.Y.Z (else it dies
+rem   on `6.9-1*1000` arithmetic). awk splits on dot or dash and emits the first
+rem   three numeric components.
+"%BASH%" -c "/bin/uname -r | /bin/awk -F'[.-]' '{print $1\".\"$2\".\"$3}' > /usr/local/etc/babun/installed/cygwin" || goto :ERROR
 rem === /MODERNIZED ===
 GOTO CYGFIX
 

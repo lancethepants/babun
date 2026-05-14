@@ -31,6 +31,17 @@ else
 fi
 /bin/mkgroup -l -c > /etc/group
 
+# === MODERNIZED: chmod failures are non-fatal ===
+#   Original:
+#     /bin/chmod 755 -R /usr/local
+#     /bin/chmod u+rwx -R /etc
+#
+#   Why: under non-admin install, some files in /etc/ have Windows ACLs the
+#   running user can't modify (same as the chmod in core/install.sh). The
+#   original behavior aborted post_extract under `set -e`, which then caused
+#   install.bat to print "Terminating due to internal error #1" and never
+#   reach the :RUN section that auto-opens the babun terminal.
 # fix file permissions in /usr/local
-/bin/chmod 755 -R /usr/local
-/bin/chmod u+rwx -R /etc
+/bin/chmod 755 -R /usr/local || echo "[babun] chmod /usr/local had warnings above (non-fatal)"
+/bin/chmod u+rwx -R /etc || echo "[babun] chmod /etc had warnings above (non-fatal)"
+# === /MODERNIZED ===

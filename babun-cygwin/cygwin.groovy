@@ -134,7 +134,14 @@ def writeCygwinVersion(File outputFolder, File repoFolder) {
     if (setupIni.exists()) {
         String cygwinEntry = setupIni.text.split("(?=@ )").find { it.startsWith("@ cygwin\n") }
         String versionLine = cygwinEntry?.split("\n")?.find { it.startsWith("version:") }
-        if (versionLine) version = versionLine.replace("version:", "").trim()
+        if (versionLine) {
+            // setup.ini's version: format is "X.Y.Z-R" (e.g. "3.6.9-1"). babun's
+            // get_version_as_number in check.sh only parses bare X.Y.Z, so we
+            // strip the "-R" build tag and any arch suffix.
+            String raw = versionLine.replace("version:", "").trim()
+            def m = raw =~ /^(\d+\.\d+\.\d+)/
+            version = m ? m[0][1] : raw
+        }
     }
     File versionFile = new File(outputFolder.parentFile, "cygwin.version")
     versionFile.text = "${version}\n"
