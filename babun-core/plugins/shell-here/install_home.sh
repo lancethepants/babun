@@ -2,8 +2,14 @@ set -e -f -o pipefail
 source "/usr/local/etc/babun.instance"
 source "$babun_tools/script.sh"
 
-#start with installing chere
-pact install chere || echo "Installing 'chere' failed. Please execute 'pact install chere' to fix it otherwise the plugin may not work."
-
-#install registry keys
-"$babun_plugins/shell-here/exec.sh" init
+# === MODERNIZED: skip "Open Babun here" context-menu registry install ===
+#   Original:
+#     pact install chere || echo "Installing 'chere' failed..."
+#     "$babun_plugins/shell-here/exec.sh" init
+#
+#   Why: this fork doesn't want HKCU registry entries auto-added during
+#   install. chere is also already in the cygwin package list so the pact
+#   install is redundant noise. End users who DO want the context menu can
+#   opt in with: babun shell-here init
+#   And remove existing entries with:                babun shell-here remove
+# === /MODERNIZED ===

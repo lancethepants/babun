@@ -128,6 +128,14 @@ def copySymlinksScripts(File inputFolder, File cygwinFolder) {
 //   (a separate repo, now dead). We parse the installed cygwin package's
 //   `version:` from setup.ini and write the real version to target/cygwin.version
 //   for core.groovy to copy into the dist tree as the installed-cygwin marker.
+//
+//   We also mirror the version to the REPO-ROOT `cygwin.version` file. That
+//   file is what check.sh fetches via raw.githubusercontent.com to determine
+//   "newest" available Cygwin version. By keeping it in sync with what was
+//   actually built, end-user `babun check` correctly compares their installed
+//   version against the version this fork last shipped. If the cygwin upstream
+//   has bumped between builds, this file changes too — show up as a git diff
+//   and commit/push so users see [OUTDATED] correctly.
 def writeCygwinVersion(File outputFolder, File repoFolder) {
     String version = "0.0.0"
     File setupIni = new File(repoFolder, "x86_64/setup.ini")
@@ -143,9 +151,23 @@ def writeCygwinVersion(File outputFolder, File repoFolder) {
             version = m ? m[0][1] : raw
         }
     }
-    File versionFile = new File(outputFolder.parentFile, "cygwin.version")
-    versionFile.text = "${version}\n"
-    println "Wrote ${versionFile.absolutePath} (cygwin ${version})"
+    // target/cygwin.version — consumed by core.groovy, becomes the dist's
+    // installed marker after extraction on the end-user machine.
+    File buildVersionFile = new File(outputFolder.parentFile, "cygwin.version")
+    buildVersionFile.text = "${version}\n"
+    println "Wrote ${buildVersionFile.absolutePath} (cygwin ${version})"
+
+    // <repo-root>/cygwin.version — fetched by check.sh from raw.githubusercontent
+    // as the "newest" reference. Sync to keep "outdated" detection accurate.
+    // outputFolder.parentFile = target/, .parentFile = repo root.
+    File repoVersionFile = new File(outputFolder.parentFile.parentFile, "cygwin.version")
+    String existing = repoVersionFile.exists() ? repoVersionFile.text.trim() : ""
+    if (existing != version) {
+        repoVersionFile.text = "${version}\n"
+        println "Updated ${repoVersionFile.absolutePath} (was [${existing}], now [${version}]) — remember to commit + push"
+    } else {
+        println "${repoVersionFile.absolutePath} already at ${version} — no change"
+    }
 }
 // === /MODERNIZED ===
 
